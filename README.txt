@@ -1,0 +1,1 @@
+A simple tool that support automatically search/add people and check their activity in Wechat groups.
