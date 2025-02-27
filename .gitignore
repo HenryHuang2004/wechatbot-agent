@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environment
+env/
+venv/
+
+# Environment files (不要上传敏感信息)
+.env
+*.env
+
+# 日志文件
+logs/
+*.log
+*Log*
+
+# VSCode 配置
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
