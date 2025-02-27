@@ -27,23 +27,46 @@ class WeChatManager:
 
         self.wcf = Wcf(debug=True)
 
-        self.invitation_queue = []
+        self.invitation_queue_file = './data/invitation_queue.json'
+        self.invitation_queue = self.load_invitation_queue()
         self.daemon_invition = threading.Thread(target=self._daemon_invition, daemon=True)
         self.daemon_invition.start()
         
 
     def set_debug(self, debug):
         self.debug = debug
+
     def _show(self):
         pass
+
     def set_default(self):
         self.window.SetActive()
         self.NavigationBox.ButtonControl(Name='聊天').Click()
-        self.log.debug('set default')
+        self.LOG.debug('set default')
+
     def get_all_children(self, control):
         for i in control.GetChildren():
-            self.log.debug(i.Name)
+            self.LOG.debug(i.Name)
             self.get_all_children(i)
+    
+    def load_invitation_queue(self):
+        if os.path.exists(self.invitation_queue_file):
+            try:
+                with open(self.invitation_queue_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.LOG.info("Load invitation_queue successfully")
+                    return data
+            except Exception as e:
+                self.LOG.error("Load invitation_queue failed %s" % e)
+        return []
+    def save_invitation_queue(self):
+        try:
+            with open(self.invitation_queue_file, 'w', encoding='utf-8') as f:
+                json.dump(self.invitation_queue, f, ensure_ascii=False)
+                self.LOG.info("Save invitation_queue successfully")
+        except Exception as e:
+            self.LOG.error("Save invitation_queue failed %s" % e)
+    
     def _daemon_invition(self):
         while True:
             self.wcf.get_contacts()
@@ -53,8 +76,10 @@ class WeChatManager:
             for x in self.wcf.contacts:
                 # x is a dict
                 if x['name'] in self.invitation_queue:
-                    self.wcf.add_chatroom_members(self.target_chatroom, x['wxid'])
-                    self.invitation_queue.remove(x['name'])
+                    with self.lock:
+                        self.wcf.add_chatroom_members(self.target_chatroom, x['wxid'])
+                        self.invitation_queue.remove(x['name'])
+                        self.save_invitation_queue()
             time.sleep(10)
     # based on ui automation, really slow
     # each time we can only do one thing, we need a lock
@@ -96,7 +121,10 @@ class WeChatManager:
         [status, name] = self.send_friend_request(id, score)
         if status == 0:
             return 0
-        self.invitation_queue.append(name)
+        with self.lock:
+            if name not in self.invitation_queue:
+                self.invitation_queue.append(name)
+                self.save_invitation_queue()
         return 1
     
     def busy_block(self):
