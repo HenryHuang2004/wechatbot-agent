@@ -6,9 +6,7 @@ import os
 from wcferry import Wcf
 
 class WeChatManager:
-    def __init__(self, debug=False, language='zh'):
-        from dotenv import load_dotenv
-        load_dotenv(dotenv_path='./../config/.env')
+    def __init__(self, debug=False, language='zh', target_chatroom='default'):
         self.target_chatroom = os.getenv('TARGET_GROUP')
         self.lock = threading.Lock()
         self.UiaAPI: auto.WindowControl = auto.WindowControl(ClassName='WeChatMainWndForPC', searchDepth=1)
@@ -18,17 +16,18 @@ class WeChatManager:
         time_now = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
         logging.basicConfig(level=logging.INFO, filename='./logs/wechatbot-agent-'+time_now+'.log', filemode='w', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         self.LOG.info('WeChatManager started')
+        self.LOG.info('Target chatroom: %s' % self.target_chatroom)
         self._show()
         MainControl1 = [i for i in self.UiaAPI.GetChildren() if not i.ClassName][0]
         MainControl2 = MainControl1.GetFirstChildControl()
         self.NavigationBox, self.SessionBox, self.ChatBox = MainControl2.GetChildren()
-
+        self.target_chatroom = target_chatroom
         self.window = auto.WindowControl(searchDepth=1, ClassName='WeChatMainWndForPC', Name='微信')
         self.window.SetActive()
 
         self.wcf = Wcf(debug=True)
 
-        self.invition_queue = []
+        self.invitation_queue = []
         self.daemon_invition = threading.Thread(target=self._daemon_invition, daemon=True)
         self.daemon_invition.start()
         
@@ -40,10 +39,10 @@ class WeChatManager:
     def set_default(self):
         self.window.SetActive()
         self.NavigationBox.ButtonControl(Name='聊天').Click()
-        self.LOG.info("set default")
+        self.log.debug('set default')
     def get_all_children(self, control):
         for i in control.GetChildren():
-            print(i.Name, i.ClassName)
+            self.log.debug(i.Name)
             self.get_all_children(i)
     def _daemon_invition(self):
         while True:
@@ -53,9 +52,9 @@ class WeChatManager:
             # if the user is in the queue, send group invition
             for x in self.wcf.contacts:
                 # x is a dict
-                if x['name'] in self.invition_queue:
-                    self.wcf.add_chatroom_members('47780907741@chatroom', x['wxid'])
-                    self.invition_queue.remove(x['name'])
+                if x['name'] in self.invitation_queue:
+                    self.wcf.add_chatroom_members(self.target_chatroom, x['wxid'])
+                    self.invitation_queue.remove(x['name'])
             time.sleep(10)
     # based on ui automation, really slow
     # each time we can only do one thing, we need a lock
@@ -76,7 +75,6 @@ class WeChatManager:
                 print(name)
                 send = ContactProfileWnd.ButtonControl(Name='添加到通讯录')
                 if send.Exists(maxSearchSeconds=1):
-                    
                     send.Click(simulateMove=False)
                     NewFriendsWnd = self.UiaAPI.WindowControl(ClassName='WeUIDialog')
                     msgedit = NewFriendsWnd.TextControl(Name="发送添加朋友申请").GetParentControl().EditControl()
@@ -98,7 +96,7 @@ class WeChatManager:
         [status, name] = self.send_friend_request(id, score)
         if status == 0:
             return 0
-        self.invition_queue.append(name)
+        self.invitation_queue.append(name)
         return 1
     
     def busy_block(self):
