@@ -3,6 +3,7 @@ import threading
 import time
 import logging
 import os
+import json
 from wcferry import Wcf
 
 class WeChatManager:
@@ -69,24 +70,27 @@ class WeChatManager:
     
     def _daemon_invition(self):
         while True:
-            self.wcf.get_contacts()
+            self.LOG.info(self.invitation_queue)
+            friends = self.wcf.get_friends()
             # check if the user is both in the contact list and in the invition queue
             # use list comprehension to get the intersection
             # if the user is in the queue, send group invition
-            for x in self.wcf.contacts:
+            for x in friends:
                 # x is a dict
                 if x['name'] in self.invitation_queue:
                     with self.lock:
-                        self.wcf.add_chatroom_members(self.target_chatroom, x['wxid'])
-                        self.invitation_queue.remove(x['name'])
-                        self.save_invitation_queue()
+                        status = self.wcf.invite_chatroom_members(self.target_chatroom, x['wxid'])
+                        if status == 1:
+                            self.LOG.info('Invitationion sent to %s' % x['wxid'])
+                            self.invitation_queue.remove(x['name'])
+                            self.save_invitation_queue()
             time.sleep(10)
     # based on ui automation, really slow
     # each time we can only do one thing, we need a lock
     # 0: user not found
     # 1: sent friend request
     # 2: already friend
-    def send_friend_request(self, id: str, score: int = 0):
+    def send_friend_request(self, id: str, score: int):
         with self.lock:
             self.set_default()
             self.NavigationBox.ButtonControl(Name='通讯录').Click()
@@ -136,6 +140,14 @@ class WeChatManager:
                 try:
                     msg = wcf.get_msg()
                     self.LOG.info(msg)
+                    # if msg contains the keyword '我通过了你的朋友验证请求，现在我们可以开始聊天了', then add the user to the group
+                    print(msg['content'])
+                    if '我通过了你的朋友验证请求，现在我们可以开始聊天了' in msg['content']:
+                        with self.lock:
+                            status = self.wcf.invite_chatroom_members(self.target_chatroom, msg['wxid'])
+                            if status == 1:
+                                self.LOG.info('Invitationion sent to %s' % msg['wxid'])
+                                self.save_invitation_queue()
                 except Exception as e:
                     if(e == None):
                         continue

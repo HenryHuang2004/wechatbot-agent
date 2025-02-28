@@ -13,10 +13,10 @@ fastapi_cdn_host.patch_docs(app)
 
 # API 路由
 @app.get("/add")
-def add_user(id: str):
+def add_user(id: str, score: Optional[int] = 0):
     print(id)
     try:
-        status = WCM.send_group_invition(id, 100)
+        status = WCM.send_group_invition(id, score)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to add users")
     
